@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"github.com/saarow/connex/pkg/tcp"
+)
 
 func main() {
-	fmt.Println("Hello, World!")
+	config := tcp.DefaultClientConfig("localhost:8080")
+	client := tcp.NewClient(config)
+
+	client.Start()
+	client.End()
 }
