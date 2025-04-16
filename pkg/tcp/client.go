@@ -63,7 +63,7 @@ func (c *Client) read() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			log.Printf("Read aborted: (%v)", c.ctx.Err())
+			// log.Printf("Read aborted: (%v)", c.ctx.Err())
 			return
 		default:
 			if c.conn == nil {
@@ -96,28 +96,41 @@ func (c *Client) read() {
 
 func (c *Client) write() {
 	defer c.wg.Done()
-	scanner := bufio.NewScanner(os.Stdin)
+
+	inputCh := make(chan string)
+	errCh := make(chan error, 1)
+	defer close(inputCh)
+	defer close(errCh)
+
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+
+		for scanner.Scan() {
+			inputCh <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- err
+		}
+
+	}()
 
 	for {
 		select {
 		case <-c.ctx.Done():
-			log.Printf("Write aborted: %v", c.ctx.Err())
+			// log.Printf("Write aborted: %v", c.ctx.Err())
 			return
-		default:
+		case err := <-errCh:
+			if err != nil {
+				log.Printf("Error Scaning input: %v", err)
+				continue
+			}
+		case msg := <-inputCh:
 			if c.conn == nil {
 				log.Println("Cannot write: connection is not active")
 				c.End()
 				return
 			}
 
-			if !scanner.Scan() {
-				if err := scanner.Err(); err != nil {
-					log.Printf("Error Scaning input: %v", err)
-				}
-				continue
-			}
-
-			msg := scanner.Text()
 			if msg == "/quit" {
 				log.Println("Quiting...")
 				c.End()
@@ -130,6 +143,7 @@ func (c *Client) write() {
 				c.End()
 				return
 			}
+
 		}
 	}
 }
