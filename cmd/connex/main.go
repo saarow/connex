@@ -1,13 +1,16 @@
 package main
 
 import (
-	"github.com/saarow/connex/pkg/tcp"
+	"github.com/saarow/connex/pkg/udp"
 )
 
 func main() {
-	config := tcp.DefaultClientConfig("localhost:8080")
-	client := tcp.NewClient(config)
+	conf := udp.ClientConfig{
+		RemoteAddress: "localhost:8080",
+		LocalAddres:   ":9999",
+	}
 
+	client := udp.NewClient(conf)
 	client.Start()
 	client.End()
 }
