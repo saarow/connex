@@ -59,29 +59,32 @@ func (c *Client) connect() error {
 func (c *Client) read() {
 	defer c.wg.Done()
 	buffer := make([]byte, 4096)
-
 	for {
 		select {
 		case <-c.ctx.Done():
-			// log.Printf("Read aborted: (%v)", c.ctx.Err())
 			return
 		default:
 			if c.conn == nil {
-				log.Println("Cannot read: connection is not active")
+				log.Println("Connection is not active")
 				c.End()
 				return
 			}
 
-			c.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			err := c.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			if err != nil {
+				log.Printf("Failed to set read deadline")
+				c.End()
+				return
+			}
 
 			n, err := c.conn.Read(buffer)
 			if err != nil {
-				if errors.Is(err, io.EOF) {
+				if errors.Is(err, os.ErrDeadlineExceeded) {
+					continue
+				} else if errors.Is(err, io.EOF) {
 					log.Println("Connection closed by remote host (EOF)")
 					c.End()
 					return
-				} else if errors.Is(err, os.ErrDeadlineExceeded) {
-					continue
 				} else {
 					log.Printf("Failed to read: %v", err)
 					c.End()
@@ -111,13 +114,11 @@ func (c *Client) write() {
 		if err := scanner.Err(); err != nil {
 			errCh <- err
 		}
-
 	}()
 
 	for {
 		select {
 		case <-c.ctx.Done():
-			// log.Printf("Write aborted: %v", c.ctx.Err())
 			return
 		case err := <-errCh:
 			if err != nil {
@@ -125,25 +126,24 @@ func (c *Client) write() {
 				continue
 			}
 		case msg := <-inputCh:
-			if c.conn == nil {
-				log.Println("Cannot write: connection is not active")
-				c.End()
-				return
-			}
-
 			if msg == "/quit" {
 				log.Println("Quiting...")
 				c.End()
 				return
 			}
 
-			_, err := c.conn.Write([]byte(msg + "\n"))
-			if err != nil {
-				log.Println("Failed to write")
+			if c.conn == nil {
+				log.Println("Connection is not active")
 				c.End()
 				return
 			}
 
+			_, err := c.conn.Write([]byte(msg + "\n"))
+			if err != nil {
+				log.Printf("Failed to write: %v", err)
+				c.End()
+				return
+			}
 		}
 	}
 }
